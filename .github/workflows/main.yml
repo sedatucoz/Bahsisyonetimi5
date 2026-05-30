@@ -1,0 +1,57 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+
+# Node.js uyarılarını kapatmak için çevre değişkeni
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodu çek
+        uses: actions/checkout@v4
+
+      - name: Java kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: ZIP Dosyasını Sorunsuz Çıkar
+        run: |
+          if [ -f *"Bahşiş"*.zip ] || [ -f *.zip ]; then
+            unzip -o *.zip
+            rm *.zip
+          fi
+
+      - name: İmza Dosyasını (Keystore) Hazırla
+        run: |
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ -f "app/debug.keystore.base64" ]; then
+            base64 -d app/debug.keystore.base64 > debug.keystore
+          else
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Gradle Wrapper Kur ve APK Oluştur
+        run: |
+          gradle wrapper
+          chmod +x ./gradlew
+          
+          # KSP IntelliJ NullPointer Hatası İçin Kesin Çözüm Komutu:
+          # --no-daemon: Arka plan servisini (daemon) kapatıp her şeyi sıfırdan, temiz bir süreçte çalıştırır.
+          # --no-build-cache: Önbellekte kalmış hatalı ksp/intellij servis yapılandırmalarını bypass eder.
+          ./gradlew assembleDebug --no-daemon --no-build-cache
+
+      - name: APK yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: "**/build/outputs/apk/debug/*.apk"
